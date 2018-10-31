@@ -1,4 +1,4 @@
-module Account where
+module Account (Account, getBalance, makeDeposit) where
     data Inflow = Fixed Rational | Flex Rational deriving (Show)
 
     -- Leaf Balance | Branch [(Account, Inflow, Maybe Max)]
