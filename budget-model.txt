@@ -2,7 +2,7 @@ It is assumed that the income to the system is in relatively fixed, two week int
 
 Money is divied into accounts (organized as a tree), which are the main entity in the budget system. Accounts may have sub-accounts OR a balance: that is, only leaf nodes may have a balance. The balance of a non-leaf node is the sum of the balances of its children.
 
-Every account has an "inflow," or the property that defines how much income it takes from the parent node. Inflows are either flat amounts, or free-remainings (where the amount deposited into the account is (my fr) / (total fr) * remaining_balance)
+Every branch account has an "inflow," or the property that defines how much income it takes from the parent node. Inflows are either flat amounts, or free-remainings (where the amount deposited into the account is (my fr) / (total fr) * remaining_balance)
 
 Inflows may have, but do not need, a maximum value. If an account is at or above its maximum value it has an effective inflow of 0.
 
