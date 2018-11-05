@@ -118,7 +118,8 @@ impl Account {
             Fixed(x) => ("Fixed", x),
             Flex(x) => ("Flex", x)
         };
-        println!("{}:\t{}\t{}({})", self.name, self.balance(), string, amount);
+        let balance = (self.balance() * Rational::from_integer(100)).to_integer() as f32 / 100.0;
+        println!("{}:\t{}\t{}({})", self.name, balance, string, amount);
         match &self.data {
             Leaf {..}  => {}
             Branch { children } => {
