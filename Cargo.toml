@@ -1,0 +1,11 @@
+[package]
+name = "budgeting"
+version = "0.1.0"
+authors = ["Ryan Goldstein <ryanisaacg@gmail.com>"]
+
+[dependencies]
+clap = "2.0"
+num-rational = { features = ["serde"], version = "*" }
+serde = "1.0.66"
+serde_derive = "*"
+serde_json = "*"
