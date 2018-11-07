@@ -1,49 +1,72 @@
-use num_rational::Rational;
+use {
+    chrono::naive::NaiveDate,
+    num_rational::Rational,
+    self::{AccountType::*, Action::*, Inflow::*},
+    std::fmt,
+};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 pub struct Account {
     name: String,
-    data: AccountData
+    data: AccountType
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct BranchEntry {
+#[derive(Debug)]
+pub struct BranchEntry {
     account: Account,
     inflow: Inflow,
     max: Option<Rational>
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-enum AccountData {
+#[derive(Debug)]
+pub enum AccountType {
     Leaf { balance: Rational },
     Branch { children: Vec<BranchEntry> }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 pub enum Inflow  {
     Fixed(Rational),
     Flex(Rational)
 }
 
-use self::AccountData::*;
-use self::Inflow::*;
+pub enum Action {
+    New { name: String, inflow: Inflow, max: Option<Rational>, parent: String, data: AccountType },
+    Withdraw { account: String, amount: Rational, date: NaiveDate },
+    Deposit { account: Option<String>, amount: Rational, date: NaiveDate }
+}
 
 impl Account {
     pub fn new_root() -> Account {
-        Account::new_branch("root".to_owned())
-    }
-
-    pub fn new_branch(name: String) -> Account {
         Account {
-            name,
+            name: "root".to_owned(),
             data: Branch { children: Vec::new() }
         }
     }
 
-    pub fn new_leaf(name: String, balance: Rational) -> Account {
-        Account {
-            name,
-            data: Leaf { balance }
+    pub fn apply(&mut self, action: Action) -> Result<(), String> {
+        match action {
+            New { name, inflow, max, parent, data } => {
+                let parent = self.find_child(&parent)
+                    .ok_or(format!("Could not find parent account {} to create account {}", parent, name))?;
+                let account = Account { name, data };
+                parent.add_child(account, inflow, max)
+            }
+            Withdraw { account, amount, .. } => {
+                let parent = self.find_child(&account)
+                    .ok_or(format!("Could not find parent account {} to withdraw from", account))?;
+                parent.withdraw(amount);
+                Ok(())
+            }
+            Deposit { account, amount, .. } => {
+                let account = match account {
+                    Some(parent) => self.find_child(&parent)
+                        .ok_or(format!("Could not find parent account {} to deposit to", parent))?,
+                    None => self
+                };
+                account.deposit(amount);
+                Ok(())
+            }
         }
     }
 
@@ -61,22 +84,24 @@ impl Account {
         match self.data {
             Leaf { ref mut balance } => *balance += amount,
             Branch { ref mut children } => {
-                let amount = children.iter_mut()
+                let mut amount = children.iter_mut()
                     .fold(amount, |amount, child| child.make_fixed_deposit(amount));
                 let total_flex: Rational = children.iter().map(BranchEntry::get_flex).sum();
-                let per_flex = amount / total_flex;
-                let amount = children.iter_mut()
-                    .fold(amount, |amount, child| child.make_flex_deposit(amount, per_flex));
+                if total_flex != Rational::from_integer(0) {
+                    let per_flex = amount / total_flex;
+                    amount = children.iter_mut()
+                        .fold(amount, |amount, child| child.make_flex_deposit(amount, per_flex));
+                }
                 let remaining = amount / Rational::from_integer(children.len() as isize);
                 children.iter_mut().for_each(|child| child.account.deposit(remaining));
             }
         }
     }
 
-    pub fn withdraw(&mut self, amount: Rational) {
+    pub fn withdraw(&mut self, amount: Rational) -> Result<(), String> {
         match self.data {
-            Leaf { ref mut balance } => *balance -= amount,
-            _ => panic!("Can't withdraw from a non-Leaf account")
+            Leaf { ref mut balance } => Ok(*balance -= amount),
+            _ => Err("Cannot withdraw from a branch node".to_owned())
         }
     }
 
@@ -101,37 +126,37 @@ impl Account {
         }
     }
 
-    pub fn add_child(&mut self, account: Account, inflow: Inflow, max: Option<Rational>) {
+    pub fn add_child(&mut self, account: Account, inflow: Inflow, max: Option<Rational>) -> Result<(), String> {
         match &mut self.data {
-            Leaf { .. } => panic!("Leaf accounts can't have children"),
+            Leaf { .. } => Err("Cannot add a child to a leaf account".to_owned()),
             Branch { children } => {
                 children.push(BranchEntry { account, inflow, max });
+                Ok(())
             }
         }
     }
 
-    fn print_level(&self, level: u32, inflow: &Inflow) {
+    fn print_level(&self, f: &mut fmt::Formatter, level: u32) -> fmt::Result {
         for _ in 0..level {
-            print!("\t");
+            print!("  ");
         }
-        let (string, amount) = match inflow {
-            Fixed(x) => ("Fixed", x),
-            Flex(x) => ("Flex", x)
-        };
         let balance = (self.balance() * Rational::from_integer(100)).to_integer() as f32 / 100.0;
-        println!("{}:\t{}\t{}({})", self.name, balance, string, amount);
+        println!("{}: {}", self.name, balance);
         match &self.data {
-            Leaf {..}  => {}
+            Leaf {..}  => Ok(()),
             Branch { children } => {
                 for child in children {
-                    child.account.print_level(level + 1, &child.inflow)
+                    child.account.print_level(f, level + 1)?
                 }
+                Ok(())
             }
         }
     }
+}
 
-    pub fn print(&self) {
-        self.print_level(0, &Flex(Rational::from_integer(1)));
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.print_level(f, 0)
     }
 }
 
@@ -139,20 +164,32 @@ impl BranchEntry {
     fn get_flex(&self) -> Rational {
         match self.inflow {
             Fixed(_) => Rational::from_integer(0),
+            Flex(_) if self.at_max() => Rational::from_integer(0),
             Flex(x) => x
+        }
+    }
+
+    fn at_max(&self) -> bool {
+        match self.max {
+            Some(max) => self.account.balance() >= max,
+            None => {
+                match &self.account.data {
+                    Leaf { .. } => false,
+                    Branch { children } => children.iter().all(BranchEntry::at_max)
+                }
+            }
         }
     }
 
     fn make_fixed_deposit(&mut self, available: Rational) -> Rational {
         match self.inflow {
             Fixed(take) => {
-                match self.max {
-                    Some(max) if self.account.balance() >= max => available,
-                    _ => {
-                        let take = if take > available { available } else { take };
-                        self.account.deposit(take);
-                        available - take
-                    }
+                if self.at_max() {
+                    available
+                } else {
+                    let take = if take > available { available } else { take };
+                    self.account.deposit(take);
+                    available - take
                 }
             }
             Flex(_) => available
@@ -161,11 +198,14 @@ impl BranchEntry {
 
     fn make_flex_deposit(&mut self, available: Rational, per_flex: Rational) -> Rational {
         match (&self.inflow, self.max) {
-            (_, Some(max)) if self.account.balance() >= max => available,
             (Flex(flex), _) => {
-                let amount = per_flex * flex;
-                self.account.deposit(amount);
-                available - amount
+                if self.at_max() {
+                    available
+                } else {
+                    let amount = per_flex * flex;
+                    self.account.deposit(amount);
+                    available - amount
+                }
             },
             _ => available
         }
