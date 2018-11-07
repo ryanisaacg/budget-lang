@@ -55,7 +55,7 @@ impl Account {
             Withdraw { account, amount, .. } => {
                 let parent = self.find_child(&account)
                     .ok_or(format!("Could not find parent account {} to withdraw from", account))?;
-                parent.withdraw(amount);
+                parent.withdraw(amount)?;
                 Ok(())
             }
             Deposit { account, amount, .. } => {
