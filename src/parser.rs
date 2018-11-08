@@ -60,10 +60,10 @@ fn parse_deposit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>
             assert_token("on", num, line)?;
             (Some(account), parse_date(num, line)?)
         }
-        "on" => {
+        "to" => {
             (None, parse_date(num, line)?)
         }
-        other => return Err(format!("Expected either 'on' or 'from', found {} at line {}", other, num)),
+        other => return Err(format!("Expected either 'to' or 'from', found {} at line {}", other, num)),
     };
     Ok(Deposit { account, amount, date })
 }
