@@ -6,5 +6,4 @@ authors = ["Ryan Goldstein <ryanisaacg@gmail.com>"]
 [dependencies]
 clap = "2"
 chrono = "0.4"
-num-rational = "*"
 regex = "1"

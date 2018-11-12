@@ -3,7 +3,6 @@ use {
         Action::{self, *}, AccountType::*, Inflow::{self, *}
     },
     chrono::naive::NaiveDate,
-    num_rational::Rational,
     regex::Regex
 };
 
@@ -68,7 +67,7 @@ fn parse_deposit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>
     Ok(Deposit { account, amount, date })
 }
 
-fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<(Inflow, Option<Rational>), String> {
+fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<(Inflow, Option<f64>), String> {
     let amount = parse_amount(num, line)?;
     let inflow = match next_token(num, line)? {
         "flex" => Ok(Flex(amount)),
@@ -83,10 +82,9 @@ fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>)
     Ok((inflow?, max?))
 }
 
-fn parse_amount<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Rational, String> {
+fn parse_amount<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<f64, String> {
     let token = next_token(num, line)?;
-    let float = token.parse::<f32>().map_err(|_| format!("Expected floating point literal at line {}, found {}", num, token))?;
-    Ok(Rational::new((float * 100.0) as isize, 100))
+    token.parse::<f64>().map_err(|_| format!("Expected floating point literal at line {}, found {}", num, token))
 }
 
 fn parse_date<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<NaiveDate, String> {

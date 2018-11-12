@@ -1,6 +1,5 @@
 extern crate clap;
 extern crate chrono;
-extern crate num_rational;
 extern crate regex;
 
 mod account;

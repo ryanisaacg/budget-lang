@@ -1,6 +1,5 @@
 use {
     chrono::naive::NaiveDate,
-    num_rational::Rational,
     self::{AccountType::*, Action::*, Inflow::*},
     std::fmt,
 };
@@ -15,25 +14,25 @@ pub struct Account {
 pub struct BranchEntry {
     account: Account,
     inflow: Inflow,
-    max: Option<Rational>
+    max: Option<f64>
 }
 
 #[derive(Debug)]
 pub enum AccountType {
-    Leaf { balance: Rational },
+    Leaf { balance: f64 },
     Branch { children: Vec<BranchEntry> }
 }
 
 #[derive(Debug)]
 pub enum Inflow  {
-    Fixed(Rational),
-    Flex(Rational)
+    Fixed(f64),
+    Flex(f64)
 }
 
 pub enum Action {
-    New { name: String, inflow: Inflow, max: Option<Rational>, parent: String, data: AccountType },
-    Withdraw { account: String, amount: Rational, date: NaiveDate },
-    Deposit { account: Option<String>, amount: Rational, date: NaiveDate }
+    New { name: String, inflow: Inflow, max: Option<f64>, parent: String, data: AccountType },
+    Withdraw { account: String, amount: f64, date: NaiveDate },
+    Deposit { account: Option<String>, amount: f64, date: NaiveDate }
 }
 
 impl Account {
@@ -70,7 +69,7 @@ impl Account {
         }
     }
 
-    pub fn balance(&self) -> Rational {
+    pub fn balance(&self) -> f64 {
         match self.data {
             Leaf { balance } => balance,
             Branch { ref children } => children
@@ -80,25 +79,25 @@ impl Account {
         }
     }
 
-    pub fn deposit(&mut self, amount: Rational) {
+    pub fn deposit(&mut self, amount: f64) {
         match self.data {
             Leaf { ref mut balance } => *balance += amount,
             Branch { ref mut children } => {
                 let mut amount = children.iter_mut()
                     .fold(amount, |amount, child| child.make_fixed_deposit(amount));
-                let total_flex: Rational = children.iter().map(BranchEntry::get_flex).sum();
-                if total_flex != Rational::from_integer(0) {
+                let total_flex: f64 = children.iter().map(BranchEntry::get_flex).sum();
+                if total_flex != 0.0 {
                     let per_flex = amount / total_flex;
                     amount = children.iter_mut()
                         .fold(amount, |amount, child| child.make_flex_deposit(amount, per_flex));
                 }
-                let remaining = amount / Rational::from_integer(children.len() as isize);
+                let remaining = amount / children.len() as f64;
                 children.iter_mut().for_each(|child| child.account.deposit(remaining));
             }
         }
     }
 
-    pub fn withdraw(&mut self, amount: Rational) -> Result<(), String> {
+    pub fn withdraw(&mut self, amount: f64) -> Result<(), String> {
         match self.data {
             Leaf { ref mut balance } => Ok(*balance -= amount),
             _ => Err("Cannot withdraw from a branch node".to_owned())
@@ -126,7 +125,7 @@ impl Account {
         }
     }
 
-    pub fn add_child(&mut self, account: Account, inflow: Inflow, max: Option<Rational>) -> Result<(), String> {
+    pub fn add_child(&mut self, account: Account, inflow: Inflow, max: Option<f64>) -> Result<(), String> {
         match &mut self.data {
             Leaf { .. } => Err("Cannot add a child to a leaf account".to_owned()),
             Branch { children } => {
@@ -140,8 +139,7 @@ impl Account {
         for _ in 0..level {
             print!("  ");
         }
-        let balance = (self.balance() * Rational::from_integer(100)).to_integer() as f32 / 100.0;
-        println!("{}: {}", self.name, balance);
+        println!("{}: {:.2}", self.name, self.balance());
         match &self.data {
             Leaf {..}  => Ok(()),
             Branch { children } => {
@@ -161,10 +159,10 @@ impl fmt::Display for Account {
 }
 
 impl BranchEntry {
-    fn get_flex(&self) -> Rational {
+    fn get_flex(&self) -> f64 {
         match self.inflow {
-            Fixed(_) => Rational::from_integer(0),
-            Flex(_) if self.at_max() => Rational::from_integer(0),
+            Fixed(_) => 0.0,
+            Flex(_) if self.at_max() => 0.0,
             Flex(x) => x
         }
     }
@@ -181,7 +179,7 @@ impl BranchEntry {
         }
     }
 
-    fn make_fixed_deposit(&mut self, available: Rational) -> Rational {
+    fn make_fixed_deposit(&mut self, available: f64) -> f64 {
         match self.inflow {
             Fixed(take) => {
                 if self.at_max() {
@@ -196,7 +194,7 @@ impl BranchEntry {
         }
     }
 
-    fn make_flex_deposit(&mut self, available: Rational, per_flex: Rational) -> Rational {
+    fn make_flex_deposit(&mut self, available: f64, per_flex: f64) -> f64 {
         match (&self.inflow, self.max) {
             (Flex(flex), _) => {
                 if self.at_max() {
