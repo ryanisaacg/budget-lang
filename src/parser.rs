@@ -55,15 +55,15 @@ fn parse_withdraw<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str
 fn parse_deposit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {
     let amount = parse_amount(num, line)?;
     let (account, date) = match next_token(num, line)? {
-        "from" => {
+        "to" => {
             let account = next_token(num, line)?.to_owned();
             assert_token("on", num, line)?;
             (Some(account), parse_date(num, line)?)
         }
-        "to" => {
+        "on" => {
             (None, parse_date(num, line)?)
         }
-        other => return Err(format!("Expected either 'to' or 'from', found {} at line {}", other, num)),
+        other => return Err(format!("Expected either 'to' or 'on', found {} at line {}", other, num)),
     };
     Ok(Deposit { account, amount, date })
 }
