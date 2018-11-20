@@ -87,7 +87,7 @@ fn parse_amount<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>)
     token.parse::<f64>().map_err(|_| format!("Expected floating point literal at line {}, found {}", num, token))
 }
 
-fn parse_date<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<NaiveDate, String> {
+pub fn parse_date<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<NaiveDate, String> {
     let date = &mut next_token(num, line)?.split("/");
     let month = parse_int(num, date)?;
     let day = parse_int(num, date)?;
