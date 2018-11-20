@@ -14,12 +14,11 @@ pub struct Account {
 pub struct BranchEntry {
     account: Account,
     inflow: Inflow,
-    max: Option<f64>
 }
 
 #[derive(Debug)]
 pub enum AccountType {
-    Leaf { balance: f64 },
+    Leaf { balance: f64, max: f64 },
     Branch { children: Vec<BranchEntry> }
 }
 
@@ -30,7 +29,7 @@ pub enum Inflow  {
 }
 
 pub enum Action {
-    New { name: String, inflow: Inflow, max: Option<f64>, parent: String, data: AccountType },
+    New { name: String, inflow: Inflow, parent: String, data: AccountType },
     Withdraw { account: String, amount: f64, date: NaiveDate },
     Deposit { account: Option<String>, amount: f64, date: NaiveDate }
 }
@@ -45,11 +44,11 @@ impl Account {
 
     pub fn apply(&mut self, action: Action) -> Result<(), String> {
         match action {
-            New { name, inflow, max, parent, data } => {
+            New { name, inflow, parent, data } => {
                 let parent = self.find_child(&parent)
                     .ok_or(format!("Could not find parent account {} to create account {}", parent, name))?;
                 let account = Account { name, data };
-                parent.add_child(account, inflow, max)
+                parent.add_child(account, inflow)
             }
             Withdraw { account, amount, .. } => {
                 let parent = self.find_child(&account)
@@ -71,7 +70,7 @@ impl Account {
 
     pub fn balance(&self) -> f64 {
         match self.data {
-            Leaf { balance } => balance,
+            Leaf { balance, .. } => balance,
             Branch { ref children } => children
                 .iter()
                 .map(|BranchEntry { account, .. }| account.balance())
@@ -81,25 +80,31 @@ impl Account {
 
     pub fn deposit(&mut self, amount: f64) {
         match self.data {
-            Leaf { ref mut balance } => *balance += amount,
+            Leaf { ref mut balance, .. } => *balance += amount,
             Branch { ref mut children } => {
+                // Make fixed deposits
                 let mut amount = children.iter_mut()
                     .fold(amount, |amount, child| child.make_fixed_deposit(amount));
-                let total_flex: f64 = children.iter().map(BranchEntry::get_flex).sum();
-                if total_flex != 0.0 {
+                // Make flex deposits
+                let mut total_flex: f64 = children.iter().map(BranchEntry::get_flex).sum();
+                while total_flex != 0.0 && amount > 0.01 {
                     let per_flex = amount / total_flex;
                     amount = children.iter_mut()
                         .fold(amount, |amount, child| child.make_flex_deposit(amount, per_flex));
+                    total_flex = children.iter().map(BranchEntry::get_flex).sum();
                 }
+                // Give up and redistribute
                 let remaining = amount / children.len() as f64;
-                children.iter_mut().for_each(|child| child.account.deposit(remaining));
+                if remaining > 0.01 {
+                    children.iter_mut().for_each(|child| child.account.deposit(remaining));
+                }
             }
         }
     }
 
     pub fn withdraw(&mut self, amount: f64) -> Result<(), String> {
         match self.data {
-            Leaf { ref mut balance } => Ok(*balance -= amount),
+            Leaf { ref mut balance, .. } => Ok(*balance -= amount),
             _ => Err("Cannot withdraw from a branch node".to_owned())
         }
     }
@@ -125,11 +130,11 @@ impl Account {
         }
     }
 
-    pub fn add_child(&mut self, account: Account, inflow: Inflow, max: Option<f64>) -> Result<(), String> {
+    pub fn add_child(&mut self, account: Account, inflow: Inflow) -> Result<(), String> {
         match &mut self.data {
             Leaf { .. } => Err("Cannot add a child to a leaf account".to_owned()),
             Branch { children } => {
-                children.push(BranchEntry { account, inflow, max });
+                children.push(BranchEntry { account, inflow });
                 Ok(())
             }
         }
@@ -159,6 +164,21 @@ impl fmt::Display for Account {
 }
 
 impl BranchEntry {
+    fn max(&self) -> f64 {
+        match &self.account.data {
+            Leaf { max, .. } => *max,
+            Branch { children } => children.iter().map(BranchEntry::max).sum()
+        }
+    }
+
+    fn until_max(&self) -> f64 {
+        self.max() - self.account.balance()
+    }
+
+    fn at_max(&self) -> bool {
+        self.until_max() <= 0.0
+    }
+
     fn get_flex(&self) -> f64 {
         match self.inflow {
             Fixed(_) => 0.0,
@@ -167,43 +187,23 @@ impl BranchEntry {
         }
     }
 
-    fn at_max(&self) -> bool {
-        match self.max {
-            Some(max) => self.account.balance() >= max,
-            None => {
-                match &self.account.data {
-                    Leaf { .. } => false,
-                    Branch { children } => children.iter().all(BranchEntry::at_max)
-                }
-            }
-        }
-    }
-
     fn make_fixed_deposit(&mut self, available: f64) -> f64 {
         match self.inflow {
             Fixed(take) => {
-                if self.at_max() {
-                    available
-                } else {
-                    let take = if take > available { available } else { take };
-                    self.account.deposit(take);
-                    available - take
-                }
+                let take = take.min(self.until_max()).min(available);
+                self.account.deposit(take);
+                available - take
             }
             Flex(_) => available
         }
     }
 
     fn make_flex_deposit(&mut self, available: f64, per_flex: f64) -> f64 {
-        match (&self.inflow, self.max) {
-            (Flex(flex), _) => {
-                if self.at_max() {
-                    available
-                } else {
-                    let amount = per_flex * flex;
-                    self.account.deposit(amount);
-                    available - amount
-                }
+        match self.inflow {
+            Flex(flex) => {
+                let take = (per_flex * flex).min(available).min(self.until_max());
+                self.account.deposit(take);
+                available - take
             },
             _ => available
         }

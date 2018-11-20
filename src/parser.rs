@@ -28,18 +28,23 @@ fn parse_new<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) ->
     let parent = next_token(num, line)?.to_owned();
     assert_token(">", num, line)?;
     let name = next_token(num, line)?.to_owned();
-    let (inflow, max) = parse_inflow(num, line)?;
+    let inflow = parse_inflow(num, line)?;
     let data = match line.next() {
         Some("with") => {
             let balance = parse_amount(num, line)?;
-            Leaf { balance }
+            let max = match line.next() {
+                Some("max") => Ok(parse_amount(num, line)?),
+                Some(other) => Err(format!("Expected either 'max value' or end-of-line, found {} at line {}", other, num)),
+                None => Ok(std::f64::INFINITY),
+            }?;
+            Leaf { balance, max }
         }
         Some(other) => {
             Err(format!("Unexpected token {} at line {}", other, num))?
         }
         None => Branch { children: Vec::new() }
     };
-    Ok(New { name, parent, inflow, max, data })
+    Ok(New { name, parent, inflow, data })
 }
 
 fn parse_withdraw<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {
@@ -67,19 +72,14 @@ fn parse_deposit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>
     Ok(Deposit { account, amount, date })
 }
 
-fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<(Inflow, Option<f64>), String> {
+fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Inflow, String> {
     let amount = parse_amount(num, line)?;
     let inflow = match next_token(num, line)? {
         "flex" => Ok(Flex(amount)),
         "fixed" => Ok(Fixed(amount)),
         other => Err(format!("Expected either 'flex' or 'fixed', found {} at line {}", other, num))
     };
-    let max = match next_token(num, line)? {
-        "max" => Ok(Some(parse_amount(num, line)?)),
-        "nomax" => Ok(None),
-        other => Err(format!("Expected either 'max value' or 'nomax', found {} at line {}", other, num))
-    };
-    Ok((inflow?, max?))
+    Ok(inflow?)
 }
 
 fn parse_amount<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<f64, String> {
