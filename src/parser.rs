@@ -18,6 +18,7 @@ pub fn parse(data: &str) -> Vec<Result<Action, String>> {
                 Some("add") => parse_new(num, tokens),
                 Some("-") => parse_withdraw(num, tokens),
                 Some("+") => parse_deposit(num, tokens),
+                Some("transfer") => parse_transfer(num, tokens),
                 _ => Err(format!("Failed to parse command at line {}", num))
             }
         })
@@ -70,6 +71,24 @@ fn parse_deposit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>
         other => return Err(format!("Expected either 'to' or 'on', found {} at line {}", other, num)),
     };
     Ok(Deposit { account, amount, date })
+}
+
+fn parse_transfer<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {
+    let amount = parse_amount(num, line)?;
+    assert_token("from", num, line)?;
+    let from = next_token(num, line)?.to_owned();
+    let (to, date) = match next_token(num, line)? {
+        "to" => {
+            let account = next_token(num, line)?.to_owned();
+            assert_token("on", num, line)?;
+            (Some(account), parse_date(num, line)?)
+        }
+        "on" => {
+            (None, parse_date(num, line)?)
+        }
+        other => return Err(format!("Expected either 'to' or 'on', found {} at line {}", other, num)),
+    };
+    Ok(Transfer { from, to, amount, date })
 }
 
 fn parse_inflow<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Inflow, String> {

@@ -1,8 +1,9 @@
 Lines ::= Command | Command Lines | Comment Lines
-Command ::= New | Withdraw | Deposit
+Command ::= New | Withdraw | Deposit | Transfer
 New ::= 'add' Account '>' Account Inflow ('with' Amount ('max' Amount)?)?
 Withdraw ::= '-' Amount 'from' Account 'on' Date
-Deposit ::= '+' Amount ('to' Account?) 'on' Date
+Deposit ::= '+' Amount ('to' Account)? 'on' Date
+Transfer ::= '-' Amount 'from' Account ('to' Account)? 'on' Date
 Date ::= \d\d'/'\d\d'/'\d\d\d\d
 Amount ::= \d+(.\d+)?
 Account ::= [A-Za-z]+

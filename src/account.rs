@@ -31,7 +31,8 @@ pub enum Inflow  {
 pub enum Action {
     New { name: String, inflow: Inflow, parent: String, data: AccountType },
     Withdraw { account: String, amount: f64, date: NaiveDate },
-    Deposit { account: Option<String>, amount: f64, date: NaiveDate }
+    Deposit { account: Option<String>, amount: f64, date: NaiveDate },
+    Transfer { from: String, to: Option<String>, amount: f64, date: NaiveDate }
 }
 
 impl Account {
@@ -64,6 +65,10 @@ impl Account {
                 };
                 account.deposit(amount);
                 Ok(())
+            }
+            Transfer { from, to, amount, date } => {
+                self.apply(Action::Withdraw { account: from, amount, date })?;
+                self.apply(Action::Deposit { account: to, amount, date })
             }
         }
     }
