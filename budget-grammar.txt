@@ -1,6 +1,8 @@
 Lines ::= Command | Command Lines | Comment Lines
-Command ::= New | Withdraw | Deposit | Transfer
+Command ::= New | Withdraw | Deposit | Transfer | Remove | Edit
 New ::= 'add' Account '>' Account Inflow ('with' Amount ('max' Amount)?)?
+Remove ::= 'remove' Account
+Edit ::= 'edit' Account Inflow ('max' Amount)?
 Withdraw ::= '-' Amount 'from' Account 'on' Date
 Deposit ::= '+' Amount ('to' Account)? 'on' Date
 Transfer ::= '-' Amount 'from' Account ('to' Account)? 'on' Date

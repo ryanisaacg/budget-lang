@@ -16,10 +16,13 @@ pub fn parse(data: &str) -> Vec<Result<Action, String>> {
             let tokens = &mut line.split_whitespace();
             match tokens.next() {
                 Some("add") => parse_new(num, tokens),
+                Some("remove") => parse_remove(num, tokens),
                 Some("-") => parse_withdraw(num, tokens),
                 Some("+") => parse_deposit(num, tokens),
                 Some("transfer") => parse_transfer(num, tokens),
-                _ => Err(format!("Failed to parse command at line {}", num))
+                Some("edit") => parse_edit(num, tokens),
+                Some(other) => Err(format!("Failed to parse command at line {}: unexpected command {}", num, other)),
+                None => Err(format!("Unexpected EOF, likely an internal error"))
             }
         })
         .collect()
@@ -33,11 +36,7 @@ fn parse_new<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) ->
     let data = match line.next() {
         Some("with") => {
             let balance = parse_amount(num, line)?;
-            let max = match line.next() {
-                Some("max") => Ok(parse_amount(num, line)?),
-                Some(other) => Err(format!("Expected either 'max value' or end-of-line, found {} at line {}", other, num)),
-                None => Ok(std::f64::INFINITY),
-            }?;
+            let max = parse_max(num, line)?;
             Leaf { balance, max }
         }
         Some(other) => {
@@ -46,6 +45,26 @@ fn parse_new<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) ->
         None => Branch { children: Vec::new() }
     };
     Ok(New { name, parent, inflow, data })
+}
+
+fn parse_remove<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {
+    let name = next_token(num, line)?.to_owned();
+    Ok(Remove { name })
+}
+
+fn parse_edit<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {
+    let name = next_token(num, line)?.to_owned();
+    let inflow = parse_inflow(num, line)?;
+    let max = parse_max(num, line)?;
+    Ok(Edit { name, inflow, max })
+}
+
+fn parse_max<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<f64, String> {
+    match line.next() {
+        Some("max") => Ok(parse_amount(num, line)?),
+        Some(other) => Err(format!("Expected either 'max value' or end-of-line, found {} at line {}", other, num)),
+        None => Ok(std::f64::INFINITY),
+    }
 }
 
 fn parse_withdraw<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {

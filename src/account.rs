@@ -4,25 +4,25 @@ use {
     std::fmt,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Account {
     name: String,
     data: AccountType
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BranchEntry {
     account: Account,
     inflow: Inflow,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AccountType {
     Leaf { balance: f64, max: f64 },
     Branch { children: Vec<BranchEntry> }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Inflow  {
     Fixed(f64),
     Flex(f64)
@@ -30,6 +30,8 @@ pub enum Inflow  {
 
 pub enum Action {
     New { name: String, inflow: Inflow, parent: String, data: AccountType },
+    Remove { name: String },
+    Edit { name: String, inflow: Inflow, max: f64 },
     Withdraw { account: String, amount: f64, date: NaiveDate },
     Deposit { account: Option<String>, amount: f64, date: NaiveDate },
     Transfer { from: String, to: Option<String>, amount: f64, date: NaiveDate }
@@ -50,6 +52,20 @@ impl Account {
                     .ok_or(format!("Could not find parent account {} to create account {}", parent, name))?;
                 let account = Account { name, data };
                 parent.add_child(account, inflow)
+            }
+            Remove { name } => {
+                self.remove(&name)?;
+                Ok(())
+            }
+            Edit { name, inflow, max } => {
+                let mut data = self.find_child(&name)
+                    .ok_or(format!("Could not find account {} to remove", name))?
+                    .data.clone();
+                if let Leaf { max: node_max, .. } = &mut data {
+                    *node_max = max;
+                }
+                let parent = self.remove(&name)?;
+                self.apply(New { name, inflow, parent: parent.clone(), data })
             }
             Withdraw { account, amount, .. } => {
                 let parent = self.find_child(&account)
@@ -80,6 +96,25 @@ impl Account {
                 .iter()
                 .map(|BranchEntry { account, .. }| account.balance())
                 .sum()
+        }
+    }
+
+    fn remove(&mut self, name: &str) -> Result<String, String> {
+        match &mut self.data {
+            Leaf { .. } => Err(format!("{} not found to remove", name)),
+            Branch { ref mut children } => {
+                let len = children.len();
+                children.retain(|child| child.account.name != name);
+                if len != children.len() {
+                    return Ok(self.name.clone());
+                }
+                for child in children.iter_mut() {
+                    if let Ok(name) = child.account.remove(name.clone()) {
+                        return Ok(name);
+                    }
+                }
+                Err(format!("{} not found to remove", name))
+            }
         }
     }
 
