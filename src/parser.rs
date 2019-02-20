@@ -6,8 +6,8 @@ use {
     regex::Regex
 };
 
-pub fn parse(data: &str) -> Vec<Result<Action, String>> {
-    Regex::new("#.*\n").unwrap().replace_all(data, "\n")
+pub fn parse(data: &str) -> Result<Vec<Action>, Vec<String>> {
+    let (actions, errors): (Vec<_>, Vec<_>) = Regex::new("#.*\n").unwrap().replace_all(data, "\n")
         .split("\n")
         .enumerate()
         .map(|(index, line)| (index + 1, line))
@@ -25,7 +25,12 @@ pub fn parse(data: &str) -> Vec<Result<Action, String>> {
                 None => Err(format!("Unexpected EOF, likely an internal error"))
             }
         })
-        .collect()
+        .partition(Result::is_ok);
+    if errors.is_empty() {
+        Ok(actions.into_iter().map(Result::unwrap).collect())
+    } else {
+        Err(errors.into_iter().map(Result::unwrap_err).collect())
+    }
 }
 
 fn parse_new<'a, 'b>(num: usize, line: &'a mut impl Iterator<Item = &'b str>) -> Result<Action, String> {

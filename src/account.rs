@@ -28,6 +28,7 @@ pub enum Inflow  {
     Flex(f64)
 }
 
+#[derive(Clone, Debug)]
 pub enum Action {
     New { name: String, inflow: Inflow, parent: String, data: AccountType },
     Remove { name: String },
@@ -194,6 +195,49 @@ impl Account {
                 Ok(())
             }
         }
+    }
+
+    pub fn diff(&self, other: &Account) -> Result<Account, String> {
+        let data = match (&self.data, &other.data) {
+            (Leaf { balance: end, max }, Leaf { balance: start, .. }) => {
+                Leaf {
+                    balance: end - start,
+                    max: *max
+                }
+            }
+            (Branch { children: start }, Branch { children: end }) => {
+                let mut children = Vec::new();
+                for start_child in start {
+                    for end_child in end {
+                        let end_child = &end_child.account;
+                        let start_child = &start_child.account;
+                        if end_child.name == start_child.name {
+                            children.push(BranchEntry {
+                                account: end_child.diff(start_child)?,
+                                inflow: Inflow::Fixed(0.0)
+                            });
+                        }
+                    }
+                }
+                for end_child in end {
+                    let end_child = &end_child.account;
+                    if children.iter().filter(|child| child.account.name == end_child.name).count() == 0 {
+                            children.push(BranchEntry {
+                                account: end_child.clone(),
+                                inflow: Inflow::Fixed(0.0)
+                            });
+                    }
+                }
+
+                Branch { children }
+            }
+            (_, _) => return Err("Tried to diff accounts of different types".to_owned())
+        };
+
+        Ok(Account {
+            name: self.name.clone(),
+            data
+        })
     }
 }
 
