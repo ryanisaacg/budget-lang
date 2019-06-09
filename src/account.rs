@@ -181,7 +181,8 @@ impl Account {
         }
     }
 
-    fn print_level(&self, f: &mut fmt::Formatter, level: u32) -> fmt::Result {
+    fn print_level(&self, f: &mut fmt::Formatter, level: u32, inflow: Inflow) -> fmt::Result {
+        print!("{:?}:\t", inflow);
         for _ in 0..level {
             print!("  ");
         }
@@ -190,7 +191,7 @@ impl Account {
             Leaf {..}  => Ok(()),
             Branch { children } => {
                 for child in children {
-                    child.account.print_level(f, level + 1)?
+                    child.account.print_level(f, level + 1, child.inflow.clone())?
                 }
                 Ok(())
             }
@@ -243,7 +244,7 @@ impl Account {
 
 impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.print_level(f, 0)
+        self.print_level(f, 0, Inflow::Flex(1.0))
     }
 }
 
