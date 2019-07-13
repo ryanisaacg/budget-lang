@@ -4,17 +4,17 @@ extern crate regex;
 
 mod account;
 mod parser;
-use {
+use crate::{
     account::{Account, Action::{self, *}},
     chrono::NaiveDate,
     clap::App,
     parser::{parse, parse_date},
-    std::{
-        fmt::Display,
-        fs::File,
-        io::Read,
-        iter::once,
-    },
+};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::Read,
+    iter::once,
 };
 
 fn err_to_str<T>(result: Result<T, impl Display>) -> Result<T, String> {
