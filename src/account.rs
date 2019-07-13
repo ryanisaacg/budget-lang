@@ -55,6 +55,10 @@ impl Account {
                 parent.add_child(account, inflow)
             }
             Remove { name } => {
+                let balance = self.find_child(&name)
+                    .ok_or(format!("Could not find account {} to remove", name))?
+                    .balance();
+                self.deposit(balance);
                 self.remove(&name)?;
                 Ok(())
             }
